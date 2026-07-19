@@ -58,7 +58,7 @@ watch(
   }
 )
 
-const videoIdPattern = /(?:sm|so)\d+/g
+const videoIdPattern = /(?:sm|so|ss)\d+/g
 
 const videoSource = ref<string>("")
 const buttonState = computed<"submit" | "search" | "close">(() => {
