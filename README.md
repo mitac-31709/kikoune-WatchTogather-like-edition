@@ -25,7 +25,7 @@ pnpm install
 # Redis起動
 docker compose -f docker-compose.dev.yml up -d redis
 
-# 開発サーバー起動
+# 開発サーバー起動（依存パッケージの build を先に実行する）
 pnpm dev
 
 # ビルド
