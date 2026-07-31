@@ -2,6 +2,23 @@
 
 Discordのアクティビティで動く、Kiite Cafe風にニコニコ動画を同時再生するアプリ。
 
+## セットアップ
+
+Node.js 22.6.0 と pnpm 9 が必要です。
+
+```bash
+# Node（nvm の例）
+nvm install
+nvm use
+
+# pnpm
+corepack enable
+corepack prepare pnpm@9.11.0 --activate
+
+# 依存関係インストール
+pnpm install
+```
+
 ## コマンド
 
 ```bash
