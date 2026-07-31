@@ -6,7 +6,7 @@ Discordのアクティビティで動く、Kiite Cafe風にニコニコ動画を
 
 ```bash
 # Redis起動
-docker-compose up -d redis
+docker compose -f docker-compose.dev.yml up -d redis
 
 # 開発サーバー起動
 pnpm dev
