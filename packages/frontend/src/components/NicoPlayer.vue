@@ -113,6 +113,15 @@ onUnmounted(() => {
   clearInterval(updateInterval)
 })
 const lastMuted = ref(false)
+const isFullscreen = ref(false)
+const toggleFullscreen = () => {
+  isFullscreen.value = !isFullscreen.value
+}
+const onKeydown = (event: KeyboardEvent) => {
+  if (event.key === "Escape" && isFullscreen.value) {
+    isFullscreen.value = false
+  }
+}
 const onMessage = (event: MessageEvent) => {
   if (event.origin !== location.origin) {
     return
@@ -185,6 +194,16 @@ const onMessage = (event: MessageEvent) => {
         url = "https://" + url.replace(dummyHost, dummyHost.replace(/--/g, "."))
       }
       discordSdk.commands.openExternalLink({ url })
+      break
+    }
+    case "enterProgrammaticFullScreen": {
+      log.info("Player requested fullscreen")
+      isFullscreen.value = true
+      break
+    }
+    case "exitProgrammaticFullScreen": {
+      log.info("Player exited fullscreen")
+      isFullscreen.value = false
       break
     }
     case "statusChange": {
@@ -266,9 +285,11 @@ const onMessage = (event: MessageEvent) => {
 }
 onMounted(() => {
   window.addEventListener("message", onMessage)
+  window.addEventListener("keydown", onKeydown)
 })
 onUnmounted(() => {
   window.removeEventListener("message", onMessage)
+  window.removeEventListener("keydown", onKeydown)
 })
 </script>
 <template>
@@ -277,6 +298,7 @@ onUnmounted(() => {
     :class="{
       'bg-slate-500 place-items-center place-content-center grid': !videoId,
       'bg-black': status === 'play',
+      'fullscreen-container': isFullscreen,
     }"
   >
     <div
@@ -293,8 +315,21 @@ onUnmounted(() => {
       ref="player"
       :key="nonce"
       :src
+      allow="autoplay; fullscreen"
+      allowfullscreen
       class="block absolute w-full h-full"
     />
+    <button
+      v-if="videoId"
+      class="absolute top-1 right-1 z-20 bg-black/50 hover:bg-black rounded p-1.5 transition-colors cursor-pointer"
+      :title="isFullscreen ? '全画面を終了' : '全画面で表示'"
+      @click="toggleFullscreen"
+    >
+      <v-icon
+        :name="isFullscreen ? 'md-fullscreenexit' : 'md-fullscreen'"
+        class="w-5 h-5 block fill-white"
+      />
+    </button>
     <template v-else-if="store.session.startedAt === sessionNotStarted">
       <h1 class="text-2xl">同期中...</h1>
     </template>
@@ -309,4 +344,35 @@ onUnmounted(() => {
     </template>
   </div>
 </template>
-<style lang="scss"></style>
+<style scoped lang="scss">
+// 全画面表示。Discordアクティビティ内ではFullscreen APIが使えない場合があるため、
+// fixed配置による擬似フルスクリーンで実現する。
+// .root の zoom-scale transform がfixedの基準になるため、その分を除いたサイズにする。
+.fullscreen-container {
+  --fw: calc(100vw / var(--zoom-scale, 1));
+  --fh: calc(100vh / var(--zoom-scale, 1));
+  // ミニプレイヤー相当の高さでは.rootのtransformが無効になる
+  @media (max-height: 240px) {
+    --fw: 100vw;
+    --fh: 100vh;
+  }
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  width: var(--fw);
+  height: var(--fh);
+  aspect-ratio: unset;
+  background: black;
+  display: grid;
+  place-items: center;
+
+  iframe {
+    // 黒帯付きで16:9を維持して最大化する
+    position: static;
+    width: min(var(--fw), calc(var(--fh) * 16 / 9));
+    height: min(var(--fh), calc(var(--fw) * 9 / 16));
+  }
+}
+</style>

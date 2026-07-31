@@ -22,6 +22,8 @@ import {
   MdBugreport,
   MdPlayarrow,
   MdPause,
+  MdFullscreen,
+  MdFullscreenexit,
 } from "oh-vue-icons/icons"
 import { patchUrlMappings } from "@discord/embedded-app-sdk"
 import { discordSdkPlugin } from "./plugins/useDiscordSdk.ts"
@@ -49,7 +51,9 @@ addIcons(
   MdSettings,
   MdBugreport,
   MdPlayarrow,
-  MdPause
+  MdPause,
+  MdFullscreen,
+  MdFullscreenexit
 )
 
 patchUrlMappings([
