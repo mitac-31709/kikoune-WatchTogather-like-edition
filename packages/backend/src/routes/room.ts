@@ -63,9 +63,11 @@ app.put(
         c.get("userId")
       )
       const video = session.video ? await getVideo(session.video.videoId) : null
+      // 一時停止中は動画の終了判定が進まないようにする
+      const effectiveNow = session.pausedAt ?? Date.now()
       if (
         !video ||
-        session.startedAt + video.length * 1000 + (buffer + 2000) < Date.now()
+        session.startedAt + video.length * 1000 + (buffer + 2000) < effectiveNow
       ) {
         if (!(!session.video && session.queue.length === 0)) {
           log.info(`[${c.req.param("id")}] Dequeueing video`)
@@ -176,12 +178,103 @@ app.post(
       }
       if (
         session.video.requestedBy !== c.get("userId") &&
-        session.host !== c.get("userId")
+        session.host !== c.get("userId") &&
+        !session.setting.controlShared
       ) {
         c.status(403)
         return c.json({ error: "Forbidden" })
       }
       await db.skipVideo(c.req.param("id"))
+      c.status(204)
+      return c.body(null)
+    })
+  }
+)
+app.post(
+  "/:id{[0-9a-z-]+?}/pause",
+  zValidator(
+    "json",
+    z.object({
+      nonce: z.string(),
+    })
+  ),
+  async (c) => {
+    return await lock.acquire(c.req.param("id"), async () => {
+      const session = await db.getSession(c.req.param("id"))
+      if (!session.video) {
+        c.status(400)
+        return c.json({ error: "No video to pause" })
+      }
+      if (session.video.nonce !== c.req.valid("json").nonce) {
+        c.status(400)
+        return c.json({ error: "Invalid nonce" })
+      }
+      if (session.host !== c.get("userId") && !session.setting.controlShared) {
+        c.status(403)
+        return c.json({ error: "Forbidden" })
+      }
+      await db.pauseVideo(c.req.param("id"))
+      c.status(204)
+      return c.body(null)
+    })
+  }
+)
+app.post(
+  "/:id{[0-9a-z-]+?}/resume",
+  zValidator(
+    "json",
+    z.object({
+      nonce: z.string(),
+    })
+  ),
+  async (c) => {
+    return await lock.acquire(c.req.param("id"), async () => {
+      const session = await db.getSession(c.req.param("id"))
+      if (!session.video) {
+        c.status(400)
+        return c.json({ error: "No video to resume" })
+      }
+      if (session.video.nonce !== c.req.valid("json").nonce) {
+        c.status(400)
+        return c.json({ error: "Invalid nonce" })
+      }
+      if (session.host !== c.get("userId") && !session.setting.controlShared) {
+        c.status(403)
+        return c.json({ error: "Forbidden" })
+      }
+      await db.resumeVideo(c.req.param("id"))
+      c.status(204)
+      return c.body(null)
+    })
+  }
+)
+app.post(
+  "/:id{[0-9a-z-]+?}/seek",
+  zValidator(
+    "json",
+    z.object({
+      nonce: z.string(),
+      time: z.number().min(0),
+    })
+  ),
+  async (c) => {
+    return await lock.acquire(c.req.param("id"), async () => {
+      const session = await db.getSession(c.req.param("id"))
+      if (!session.video) {
+        c.status(400)
+        return c.json({ error: "No video to seek" })
+      }
+      if (session.video.nonce !== c.req.valid("json").nonce) {
+        c.status(400)
+        return c.json({ error: "Invalid nonce" })
+      }
+      if (session.host !== c.get("userId") && !session.setting.controlShared) {
+        c.status(403)
+        return c.json({ error: "Forbidden" })
+      }
+      const video = await getVideo(session.video.videoId)
+      const time = Math.min(c.req.valid("json").time, video.length * 1000)
+      await db.seekVideo(c.req.param("id"), time)
       c.status(204)
       return c.body(null)
     })
@@ -220,7 +313,8 @@ app.delete("/:id{[0-9a-z-]+?}/queue/:nonce{[0-9a-z-]+?}", async (c) => {
     }
     if (
       video?.requestedBy !== c.get("userId") &&
-      session.host !== c.get("userId")
+      session.host !== c.get("userId") &&
+      !session.setting.controlShared
     ) {
       c.status(403)
       return c.json({ error: "Forbidden" })
@@ -237,7 +331,7 @@ app.put(
   async (c) => {
     return await lock.acquire(c.req.param("id"), async () => {
       const session = await db.getSession(c.req.param("id"))
-      if (session.host !== c.get("userId")) {
+      if (session.host !== c.get("userId") && !session.setting.controlShared) {
         c.status(403)
         return c.json({ error: "Not the host" })
       }
