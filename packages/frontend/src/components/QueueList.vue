@@ -318,7 +318,7 @@ const placeholder = computed(() => {
       @sort="setReordered"
     >
       <template #header>
-        <p v-if="store.isHost && !store.sessionSetting.random" class="pl-2">
+        <p v-if="store.canControl && !store.sessionSetting.random" class="pl-2">
           数字をドラッグして順番を変更できます。
         </p>
         <p v-if="store.sessionSetting.random" class="pl-2">
@@ -332,7 +332,7 @@ const placeholder = computed(() => {
             :class="{
               'handle cursor-grab':
                 !temporaryAdded.includes(video) &&
-                store.isHost &&
+                store.canControl &&
                 !store.sessionSetting.random,
               'text-opacity-50': temporaryAdded.includes(video),
               '!bg-cyan-900':
@@ -367,7 +367,7 @@ const placeholder = computed(() => {
 
             <div class="flex sm:hidden flex-row gap-2">
               <TooltipIcon
-                v-if="store.isHost || video.requestedBy === store.me.id"
+                v-if="store.canControl || video.requestedBy === store.me.id"
                 class="self-center cursor-pointer h-full aspect-square grid place-items-center"
                 name="md-delete"
                 tooltip="削除"
@@ -386,7 +386,7 @@ const placeholder = computed(() => {
 
           <div class="flex-row hidden sm:flex pr-2">
             <TooltipIcon
-              v-if="store.isHost || video.requestedBy === store.me.id"
+              v-if="store.canControl || video.requestedBy === store.me.id"
               class="self-center cursor-pointer h-3/4 aspect-square grid place-items-center p-3"
               name="md-delete"
               tooltip="削除"

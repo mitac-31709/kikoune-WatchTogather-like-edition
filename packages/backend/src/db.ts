@@ -20,6 +20,7 @@ export type DbSessionVideo = {
 export type DbSession = {
   video: DbSessionVideo | null
   startedAt: number
+  pausedAt: number | null
   queue: DbSessionVideo[]
   host: string
   setting: SessionSetting
@@ -67,7 +68,11 @@ export const getSession = async (roomId: string): Promise<DbSession> => {
   if (!sessionRaw) {
     throw new Error("Session does not exist")
   }
-  return JSON.parse(sessionRaw)
+  const session: DbSession = JSON.parse(sessionRaw)
+  // 古い形式のセッション（TTL経過で消えるまでの間）を新形式に正規化する
+  session.pausedAt ??= null
+  session.setting = { ...defaultSessionSetting, ...session.setting }
+  return session
 }
 export const keepAliveSession = async (roomId: string) => {
   await redis.expire(roomSession(roomId), 60)
@@ -77,9 +82,10 @@ export const createSession = async (
   host: string
 ): Promise<DbSession> => {
   const startedAt = Date.now()
-  const session = {
+  const session: DbSession = {
     video: null,
     startedAt,
+    pausedAt: null,
     queue: [],
     host,
     setting: defaultSessionSetting,
@@ -117,6 +123,7 @@ export const dequeueVideo = async (
     videoId = session.queue.shift()
   }
   session.startedAt = Date.now()
+  session.pausedAt = null
   session.video = videoId ?? null
   log.info(`[${roomId}] Dequeued video: ${videoId?.videoId}`)
   await redis.set(roomSession(roomId), JSON.stringify(session), "EX", 60)
@@ -151,6 +158,35 @@ export const skipVideo = async (roomId: string) => {
     return
   }
   await dequeueVideo(roomId, session)
+}
+export const pauseVideo = async (roomId: string) => {
+  const session = await getSession(roomId)
+  if (!session.video || session.pausedAt !== null) {
+    return
+  }
+  session.pausedAt = Date.now()
+  await redis.set(roomSession(roomId), JSON.stringify(session), "EX", 60)
+}
+export const resumeVideo = async (roomId: string) => {
+  const session = await getSession(roomId)
+  if (!session.video || session.pausedAt === null) {
+    return
+  }
+  session.startedAt += Date.now() - session.pausedAt
+  session.pausedAt = null
+  await redis.set(roomSession(roomId), JSON.stringify(session), "EX", 60)
+}
+export const seekVideo = async (roomId: string, time: number) => {
+  const session = await getSession(roomId)
+  if (!session.video) {
+    return
+  }
+  const now = Date.now()
+  session.startedAt = now - Math.max(0, time)
+  if (session.pausedAt !== null) {
+    session.pausedAt = now
+  }
+  await redis.set(roomSession(roomId), JSON.stringify(session), "EX", 60)
 }
 export const setHost = async (roomId: string, host: string) => {
   const session = await getSession(roomId)

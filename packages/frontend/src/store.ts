@@ -3,6 +3,7 @@ import {
   MemberState,
   SessionSetting,
   Session,
+  buffer,
   defaultSessionSetting,
 } from "@kikoune/shared"
 import { Participant } from "./plugins/useDiscordSdk.ts"
@@ -14,6 +15,7 @@ export const useStore = defineStore("main", {
     session: {
       queue: [],
       startedAt: sessionNotStarted,
+      pausedAt: null,
       host: "",
       video: undefined,
       setting: defaultSessionSetting,
@@ -23,6 +25,12 @@ export const useStore = defineStore("main", {
     stateOverride: {} as Partial<MemberState>,
     stateOverrideUpdatedAt: 0,
     settingOverride: {} as Partial<SessionSetting>,
+    pausedOverride: undefined as
+      | { nonce: string; paused: boolean; at: number; position: number }
+      | undefined,
+    seekOverride: undefined as
+      | { nonce: string; at: number; time: number }
+      | undefined,
 
     participants: [] as Participant[],
     allParticipants: [] as Participant[],
@@ -68,6 +76,39 @@ export const useStore = defineStore("main", {
         (state.session.queue.length < this.sessionSetting.queueLimit &&
           !this.sessionSetting.queueLocked)
       )
+    },
+    isPaused(state): boolean {
+      return state.session.pausedAt !== null
+    },
+    isPausedEffective(state): boolean {
+      return state.pausedOverride?.paused ?? state.session.pausedAt !== null
+    },
+    canControl(): boolean {
+      return this.isHost || this.sessionSetting.controlShared
+    },
+    // 動画先頭からの再生位置（ミリ秒）を返す関数を返す。負値はバッファ待機中
+    rawPosition(state) {
+      return (now: number): number => {
+        const nonce = state.session.video?.nonce
+        const paused =
+          state.pausedOverride?.paused ?? state.session.pausedAt !== null
+        if (state.seekOverride && state.seekOverride.nonce === nonce) {
+          const override = state.seekOverride
+          return paused ? override.time : override.time + (now - override.at)
+        }
+        if (state.pausedOverride && state.pausedOverride.nonce === nonce) {
+          const override = state.pausedOverride
+          return override.paused
+            ? override.position
+            : override.position + (now - override.at)
+        }
+        return (
+          (state.session.pausedAt ?? now) -
+          state.session.startedAt -
+          buffer +
+          state.delay
+        )
+      }
     },
   },
   actions: {
@@ -147,6 +188,53 @@ export const useStore = defineStore("main", {
     },
     resetSettingOverride() {
       this.settingOverride = {}
+    },
+    setPausedOverride(paused: boolean) {
+      const at = Date.now()
+      this.pausedOverride = {
+        nonce: this.session.video?.nonce ?? "",
+        paused,
+        at,
+        position: this.rawPosition(at),
+      }
+      // 凍結位置に吸収されたのでシークのオーバーライドは破棄する
+      this.seekOverride = undefined
+    },
+    setSeekOverride(time: number) {
+      this.seekOverride = {
+        nonce: this.session.video?.nonce ?? "",
+        at: Date.now(),
+        time,
+      }
+    },
+    // 同期結果がオーバーライドを反映していたら（または別動画に変わっていたら）破棄する
+    reconcilePlaybackOverrides() {
+      const nonce = this.session.video?.nonce
+      if (this.pausedOverride) {
+        const matches =
+          (this.session.pausedAt !== null) === this.pausedOverride.paused
+        if (this.pausedOverride.nonce !== nonce || matches) {
+          this.pausedOverride = undefined
+        }
+      }
+      if (this.seekOverride) {
+        const override = this.seekOverride
+        const paused =
+          this.pausedOverride?.paused ?? this.session.pausedAt !== null
+        const sessionPos =
+          (this.session.pausedAt ?? Date.now()) -
+          this.session.startedAt -
+          buffer
+        const overridePos = paused
+          ? override.time
+          : override.time + (Date.now() - override.at)
+        if (
+          override.nonce !== nonce ||
+          Math.abs(sessionPos - overridePos) < 2500
+        ) {
+          this.seekOverride = undefined
+        }
+      }
     },
   },
 })

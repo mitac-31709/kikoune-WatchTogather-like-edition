@@ -45,6 +45,7 @@ export const fetchSession = async (session: DbSession): Promise<Session> => {
         }
       : undefined,
     startedAt: session.startedAt,
+    pausedAt: session.pausedAt,
     host: session.host,
     setting: session.setting,
     queue: await Promise.all(

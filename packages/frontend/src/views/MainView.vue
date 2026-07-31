@@ -51,6 +51,7 @@ const update = async () => {
   } = await res.json()
   store.setSession(data.session)
   store.setMemberStates(data.memberStates)
+  store.reconcilePlaybackOverrides()
   store.resetIsHostOverride()
   store.resetSettingOverride()
   if (Date.now() - store.stateOverrideUpdatedAt > 500) {

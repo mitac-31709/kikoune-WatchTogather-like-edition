@@ -2,7 +2,6 @@
 import consola from "consola/browser"
 import { v4 as uuid } from "uuid"
 import { computed, ref, onMounted, onUnmounted, watch } from "vue"
-import { buffer } from "@kikoune/shared"
 import { useDiscordSdk } from "~/plugins/useDiscordSdk"
 import { sessionNotStarted, useStore } from "~/store"
 
@@ -41,6 +40,18 @@ let status = ref<"init" | "preload" | "load" | "presync" | "sync" | "play">(
   "init"
 )
 
+const getTargetTime = () => store.rawPosition(Date.now())
+const postToPlayer = (message: Record<string, unknown>) => {
+  player.value?.contentWindow?.postMessage(
+    {
+      sourceConnectorType: 1,
+      playerId: playerNonce,
+      ...message,
+    },
+    location.origin
+  )
+}
+
 watch(
   nonce,
   () => {
@@ -49,6 +60,42 @@ watch(
   },
   { immediate: true }
 )
+watch(
+  () => store.isPausedEffective,
+  (paused, prevPaused) => {
+    if (status.value !== "play") return
+    if (paused && !prevPaused) {
+      log.info("Pausing player")
+      postToPlayer({ eventName: "pause" })
+    } else if (!paused && prevPaused) {
+      log.info("Resuming player")
+      postToPlayer({ eventName: "seek", data: { time: getTargetTime() } })
+      postToPlayer({ eventName: "play" })
+    }
+  }
+)
+watch(
+  () => store.session.startedAt,
+  (startedAt, prevStartedAt) => {
+    // nonceが変わった場合はstatusがinitに戻るので、ここに来るのはシーク時のみ
+    if (status.value !== "play" || startedAt === prevStartedAt) return
+    log.info("Seek detected, syncing player")
+    postToPlayer({ eventName: "seek", data: { time: getTargetTime() } })
+    if (store.isPausedEffective) {
+      postToPlayer({ eventName: "pause" })
+    }
+  }
+)
+watch(
+  () => store.seekOverride,
+  (override) => {
+    if (!override || status.value !== "play") return
+    postToPlayer({ eventName: "seek", data: { time: override.time } })
+    if (!store.isPausedEffective) {
+      postToPlayer({ eventName: "play" })
+    }
+  }
+)
 const serverTime = ref(0)
 let updateInterval: ReturnType<typeof setInterval> | undefined = undefined
 watch(
@@ -56,8 +103,7 @@ watch(
   (debug) => {
     if (debug) {
       updateInterval = setInterval(() => {
-        serverTime.value =
-          Date.now() - store.session.startedAt - buffer + store.delay
+        serverTime.value = getTargetTime()
       }, 100)
     }
   },
@@ -154,8 +200,7 @@ const onMessage = (event: MessageEvent) => {
       break
     }
     case "playerMetadataChange": {
-      const targetTime =
-        Date.now() - store.session.startedAt - buffer + store.delay
+      const targetTime = getTargetTime()
       if (targetTime < 0) {
         return
       }
@@ -190,6 +235,11 @@ const onMessage = (event: MessageEvent) => {
           location.origin
         )
         status.value = "play"
+        // 一時停止中のセッションに途中参加した場合は、その場で止める
+        if (store.isPausedEffective) {
+          log.info("Session is paused, pausing player after sync")
+          postToPlayer({ eventName: "pause" })
+        }
       }
       if (data.data.isVideoMetaDataLoaded && status.value === "load") {
         log.info(`Seeking to ${targetTime} to load video`)

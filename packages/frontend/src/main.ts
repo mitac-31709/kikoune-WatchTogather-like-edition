@@ -20,6 +20,8 @@ import {
   MdZoomout,
   MdSettings,
   MdBugreport,
+  MdPlayarrow,
+  MdPause,
 } from "oh-vue-icons/icons"
 import { patchUrlMappings } from "@discord/embedded-app-sdk"
 import { discordSdkPlugin } from "./plugins/useDiscordSdk.ts"
@@ -45,7 +47,9 @@ addIcons(
   MdZoomin,
   MdZoomout,
   MdSettings,
-  MdBugreport
+  MdBugreport,
+  MdPlayarrow,
+  MdPause
 )
 
 patchUrlMappings([
