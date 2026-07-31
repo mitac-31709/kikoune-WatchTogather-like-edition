@@ -3,6 +3,7 @@ import { Redis } from "ioredis"
 import {
   MemberState,
   SessionSetting,
+  buffer,
   defaultSessionSetting,
 } from "@kikoune/shared"
 
@@ -181,8 +182,9 @@ export const seekVideo = async (roomId: string, time: number) => {
   if (!session.video) {
     return
   }
+  // クライアント側の再生位置は startedAt から buffer 分遅れて進むため、その分を引く
   const now = Date.now()
-  session.startedAt = now - Math.max(0, time)
+  session.startedAt = now - Math.max(0, time) - buffer
   if (session.pausedAt !== null) {
     session.pausedAt = now
   }
