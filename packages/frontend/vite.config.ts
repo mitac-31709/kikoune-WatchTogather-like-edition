@@ -41,6 +41,8 @@ export default defineConfig(async () => {
     ],
     server: {
       port: 1103,
+      // Discord Activity 経由の cloudflared (*.trycloudflare.com) を許可
+      allowedHosts: [".trycloudflare.com"],
       proxy: {
         "/api": {
           target: "http://localhost:1104",
