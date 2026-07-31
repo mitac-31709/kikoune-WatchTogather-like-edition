@@ -38,6 +38,10 @@ const random = computed({
   get: () => setting.value.random,
   set: (value) => updateSetting("random", value),
 })
+const controlShared = computed({
+  get: () => setting.value.controlShared,
+  set: (value) => updateSetting("controlShared", value),
+})
 const queueHidden = computed({
   get: () => setting.value.queueHidden,
   set: (value) => updateSetting("queueHidden", value),
@@ -84,6 +88,15 @@ const queueLimit = computed({
       <div class="px-2 config-item">
         <label>ランダム再生 <input v-model="random" type="checkbox" /></label>
         <p>キューをランダムな順序で再生します。</p>
+      </div>
+      <div class="px-2 config-item">
+        <label
+          >全員にコントロールを共有する
+          <input v-model="controlShared" type="checkbox"
+        /></label>
+        <p>
+          全員が一時停止・再開・シーク・スキップ・キューの編集を行えるようになります。
+        </p>
       </div>
     </div>
   </div>
